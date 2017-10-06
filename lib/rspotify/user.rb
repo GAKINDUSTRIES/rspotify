@@ -30,65 +30,46 @@ module RSpotify
       false
     end
 
-    def self.refresh_token(user_id)
+    def self.refresh_token()
       request_body = {
         grant_type: 'refresh_token',
-        refresh_token: @@users_credentials[user_id]['refresh_token']
+        refresh_token: @@users_credentials['refresh_token']
       }
       response = RestClient.post(TOKEN_URI, request_body, RSpotify.send(:auth_header))
       response = JSON.parse(response)
-      @@users_credentials[user_id]['token'] = response['access_token']
+      @@users_credentials['token'] = response['access_token']
     rescue RestClient::BadRequest => e
       raise e if e.response !~ /Refresh token revoked/
     end
     private_class_method :refresh_token
 
-    def self.oauth_header(user_id)
+    def self.oauth_header()
       {
-        'Authorization' => "Bearer #{@@users_credentials[user_id]['token']}",
+        'Authorization' => "Bearer #{@@users_credentials['token']}",
         'Content-Type'  => 'application/json'
       }
     end
     private_class_method :oauth_header
 
-    def self.oauth_send(user_id, verb, path, *params)
+    def self.oauth_send(verb, path, *params)
       RSpotify.send(:send_request, verb, path, *params)
     rescue RestClient::Unauthorized => e
       raise e if e.response !~ /access token expired/
-      refresh_token(user_id)
-      params[-1] = oauth_header(user_id)
+      refresh_token()
+      params[-1] = oauth_header()
       RSpotify.send(:send_request, verb, path, *params)
     end
     private_class_method :oauth_header
 
     RSpotify::VERBS.each do |verb|
-      define_singleton_method "oauth_#{verb}" do |user_id, path, *params|
-        params << oauth_header(user_id)
-        oauth_send(user_id, verb, path, *params)
+      define_singleton_method "oauth_#{verb}" do |path, *params|
+        params << oauth_header()
+        oauth_send(verb, path, *params)
       end
     end
 
-    def initialize(options = {})
-      credentials = options['credentials']
-      extra       = options['extra'].to_h
-      options     = options['info'] if options['info']
-      options.merge!(extra['raw_info'].to_h)
-
-      @birthdate    ||= options['birthdate']
-      @country      ||= options['country']
-      @display_name ||= options['display_name']
-      @email        ||= options['email']
-      @followers    ||= options['followers']
-      @images       ||= options['images']
-      @product      ||= options['product']
-
-      super(options)
-
-      if credentials
-        @@users_credentials ||= {}
-        @@users_credentials[@id] = credentials
-        @credentials = @@users_credentials[@id]
-      end
+    def initialize( token, refresh_token )
+      @@users_credentials ||= { refresh_token: refresh_token, token: token }
     end
 
     # Creates a playlist in user's Spotify account. This method is only available when the current
@@ -142,7 +123,7 @@ module RSpotify
     #           recently_played.first.name #=> "Ice to Never"
     def recently_played(limit: 20)
       url = "me/player/recently-played?limit=#{limit}"
-      response = RSpotify.resolve_auth_request(@id, url)
+      response = RSpotify.resolve_auth_request(url)
       return response if RSpotify.raw_response
 
       json = RSpotify.raw_response ? JSON.parse(response) : response

@@ -37,13 +37,13 @@ module RSpotify
       end
     end
 
-    def resolve_auth_request(user_id, url)
+    def resolve_auth_request(url)
       users_credentials = if User.class_variable_defined?('@@users_credentials')
         User.class_variable_get('@@users_credentials')
       end
 
-      if users_credentials && users_credentials[user_id]
-        User.oauth_get(user_id, url)
+      if users_credentials
+        User.oauth_get(url)
       else
         get(url)
       end
@@ -63,10 +63,10 @@ module RSpotify
       rescue RestClient::Unauthorized
         if @client_token
           authenticate(@client_id, @client_secret)
-          
+
           obj = params.find{|x| x.is_a?(Hash) && x['Authorization']}
           obj['Authorization'] = "Bearer #{@client_token}"
-          
+
           response = retry_connection verb, url, params
         end
       end
@@ -74,7 +74,7 @@ module RSpotify
       return response if raw_response
       JSON.parse response unless response.empty?
     end
-    
+
     # Added this method for testing
     def retry_connection verb, url, params
       RestClient.send(verb, url, *params)
